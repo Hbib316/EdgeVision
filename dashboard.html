@@ -1,0 +1,1911 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - ESP32-CAM Surveillance</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <style>
+        :root {
+            --primary: #667eea;
+            --secondary: #764ba2;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --light: #f9fafb;
+            --dark: #111827;
+            --gray: #6b7280;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--light);
+            color: var(--dark);
+            min-height: 100vh;
+        }
+        
+        .navbar {
+            background: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 64px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+        }
+        
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 600;
+            color: var(--primary);
+        }
+        
+        .nav-brand-icon {
+            font-size: 24px;
+        }
+        
+        .nav-user {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+        
+        .logout-btn {
+            padding: 8px 16px;
+            background: var(--light);
+            border: 1px solid var(--gray);
+            border-radius: 8px;
+            color: var(--dark);
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        .logout-btn:hover {
+            background: var(--danger);
+            color: white;
+            border-color: var(--danger);
+        }
+        
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 64px;
+            bottom: 0;
+            width: 240px;
+            background: white;
+            box-shadow: 1px 0 3px rgba(0, 0, 0, 0.1);
+            padding: 24px 0;
+            overflow-y: auto;
+        }
+        
+        .sidebar-menu {
+            list-style: none;
+        }
+        
+        .menu-item {
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--gray);
+            cursor: pointer;
+            transition: all 0.3s;
+            border-left: 4px solid transparent;
+        }
+        
+        .menu-item:hover {
+            background: var(--light);
+            color: var(--primary);
+        }
+        
+        .menu-item.active {
+            background: var(--light);
+            color: var(--primary);
+            border-left-color: var(--primary);
+            font-weight: 500;
+        }
+        
+        .menu-icon {
+            font-size: 20px;
+        }
+        
+        .main-content {
+            margin-left: 240px;
+            margin-top: 64px;
+            padding: 24px;
+            min-height: calc(100vh - 64px);
+        }
+        
+        .dashboard-header {
+            margin-bottom: 24px;
+        }
+        
+        .dashboard-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--dark);
+            margin-bottom: 8px;
+        }
+        
+        .dashboard-subtitle {
+            color: var(--gray);
+            font-size: 14px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e5e7eb;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+        
+        .stat-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+        
+        .stat-icon {
+            font-size: 24px;
+            color: var(--primary);
+        }
+        
+        .stat-title {
+            font-size: 14px;
+            color: var(--gray);
+            font-weight: 500;
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: 600;
+            color: var(--dark);
+        }
+        
+        .stat-change {
+            font-size: 12px;
+            color: var(--success);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .filters-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .filters-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: var(--dark);
+        }
+        
+        .filters-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+        
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .filter-label {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--dark);
+        }
+        
+        .filter-select {
+            padding: 10px 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+        }
+        
+        .filter-select:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        
+        .detections-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .detections-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .detections-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--dark);
+        }
+        
+        .detections-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .detections-table th {
+            text-align: left;
+            padding: 12px 16px;
+            background: var(--light);
+            font-weight: 600;
+            color: var(--dark);
+            border-bottom: 2px solid #e5e7eb;
+        }
+        
+        .detections-table td {
+            padding: 16px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .detections-table tr:hover {
+            background: var(--light);
+        }
+        
+        .label-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .label-bottle { background: #dbeafe; color: #1e40af; }
+        .label-cup { background: #dcfce7; color: #166534; }
+        .label-person { background: #fef3c7; color: #92400e; }
+        .label-car { background: #fee2e2; color: #991b1b; }
+        .label-unknown { background: #e5e7eb; color: #374151; }
+        
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        
+        .status-online { background: var(--success); }
+        .status-offline { background: var(--danger); }
+        .status-warning { background: var(--warning); }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            margin-top: 24px;
+        }
+        
+        .pagination-btn {
+            padding: 8px 16px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        .pagination-btn:hover {
+            background: var(--light);
+            border-color: var(--primary);
+        }
+        
+        .pagination-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 48px;
+            color: var(--gray);
+        }
+        
+        .empty-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+        
+        .refresh-btn {
+            padding: 10px 20px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+        
+        .refresh-btn:hover {
+            background: var(--secondary);
+        }
+        
+        /* Styles pour les boutons de suppression */
+        .clear-btn {
+            padding: 10px 20px;
+            background: var(--danger);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+        
+        .clear-btn:hover {
+            background: #dc2626;
+        }
+        
+        .clear-period-btn {
+            padding: 10px 20px;
+            background: var(--warning);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+        
+        .clear-period-btn:hover {
+            background: #d97706;
+        }
+        
+        .delete-selected-btn {
+            padding: 8px 16px;
+            background: var(--danger);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        
+        .delete-selected-btn:hover {
+            background: #dc2626;
+        }
+        
+        .clear-selection-btn {
+            padding: 8px 16px;
+            background: var(--light);
+            color: var(--dark);
+            border: 1px solid var(--gray);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        .clear-selection-btn:hover {
+            background: #e5e7eb;
+        }
+        
+        /* Animation pour les modals */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        /* Style pour les cases à cocher */
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+            
+            .filters-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .section {
+            display: none;
+        }
+        
+        .section.active {
+            display: block;
+        }
+        
+        .log-entry {
+            padding: 8px 12px;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 13px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .log-entry:first-child {
+            border-top: 1px solid #e5e7eb;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-brand">
+            <span class="nav-brand-icon">🎯</span>
+            <span>ESP32-CAM Dashboard</span>
+        </div>
+        <div class="nav-user">
+            <div class="user-avatar" id="userAvatar">A</div>
+            <button class="logout-btn" onclick="logout()">Déconnexion</button>
+        </div>
+    </nav>
+    
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <ul class="sidebar-menu">
+            <li class="menu-item active" onclick="showSection('dashboard')">
+                <span class="menu-icon">📊</span>
+                <span>Dashboard</span>
+            </li>
+            <li class="menu-item" onclick="showSection('detections')">
+                <span class="menu-icon">🔍</span>
+                <span>Détections</span>
+            </li>
+            <li class="menu-item" onclick="showSection('history')">
+                <span class="menu-icon">📋</span>
+                <span>Historique</span>
+            </li>
+            <li class="menu-item" onclick="showSection('labels')">
+                <span class="menu-icon">🏷️</span>
+                <span>Labels</span>
+            </li>
+            <li class="menu-item" onclick="showSection('system')">
+                <span class="menu-icon">⚙️</span>
+                <span>Système</span>
+            </li>
+        </ul>
+    </aside>
+    
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Dashboard Section -->
+        <section id="dashboard" class="section active">
+            <div class="dashboard-header">
+                <h1 class="dashboard-title">Tableau de bord</h1>
+                <p class="dashboard-subtitle">Vue d'ensemble du système de surveillance</p>
+            </div>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <span class="stat-title">Détections en direct</span>
+                        <span class="stat-icon">📡</span>
+                    </div>
+                    <div class="stat-value" id="liveCount">0</div>
+                    <div class="stat-change" id="liveStatus">En attente...</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <span class="stat-title">Total détections</span>
+                        <span class="stat-icon">📈</span>
+                    </div>
+                    <div class="stat-value" id="totalDetections">-</div>
+                    <div class="stat-change">Base de données</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <span class="stat-title">Labels actifs</span>
+                        <span class="stat-icon">🏷️</span>
+                    </div>
+                    <div class="stat-value" id="activeLabels">-</div>
+                    <div class="stat-change">Catégories détectées</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <span class="stat-title">Statut système</span>
+                        <span class="stat-icon">✅</span>
+                    </div>
+                    <div class="stat-value" id="systemStatus">-</div>
+                    <div class="stat-change" id="systemUptime">-</div>
+                </div>
+            </div>
+            
+            <div class="filters-card">
+                <h2 class="filters-title">Filtres de détection</h2>
+                <div class="filters-grid">
+                    <div class="filter-group">
+                        <label class="filter-label">Label</label>
+                        <select class="filter-select" id="labelFilter" onchange="filterByLabel()">
+                            <option value="all">Tous les labels</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label class="filter-label">Statut</label>
+                        <select class="filter-select" id="statusFilter" onchange="filterByStatus()">
+                            <option value="all">Tous les statuts</option>
+                            <option value="detected">Détectés uniquement</option>
+                            <option value="none">Non détectés</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label class="filter-label">Période</label>
+                        <select class="filter-select" id="periodFilter" onchange="filterByPeriod()">
+                            <option value="today">Aujourd'hui</option>
+                            <option value="week">Cette semaine</option>
+                            <option value="month">Ce mois</option>
+                            <option value="all">Toute la période</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="detections-card">
+                <div class="detections-header">
+                    <h2 class="detections-title">Dernières détections</h2>
+                    <button class="refresh-btn" onclick="loadRecentDetections()">Actualiser</button>
+                </div>
+                
+                <div id="recentDetections">
+                    <table class="detections-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Label</th>
+                                <th>Position</th>
+                                <th>Date</th>
+                                <th>Statut</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detectionsTableBody">
+                            <tr>
+                                <td colspan="5" class="empty-state">
+                                    <div class="empty-icon">📊</div>
+                                    <p>Chargement des données...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Detections Section -->
+        <section id="detections" class="section">
+            <div class="dashboard-header">
+                <h1 class="dashboard-title">Détections en temps réel</h1>
+                <p class="dashboard-subtitle">Flux de détections en direct depuis l'ESP32-CAM</p>
+            </div>
+            
+            <div class="detections-card">
+                <div class="detections-header">
+                    <h2 class="detections-title">Flux de détections</h2>
+                    <div class="status-indicator">
+                        <span class="status-dot" id="mqttDot"></span>
+                        <span id="mqttStatus">Connexion MQTT...</span>
+                    </div>
+                </div>
+                
+                <div id="liveStream">
+                    <div class="empty-state">
+                        <div class="empty-icon">📡</div>
+                        <p>Connexion au flux en cours...</p>
+                        <button class="refresh-btn" onclick="connectMQTT()" style="margin-top: 16px;">Reconnecter</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- History Section -->
+        <section id="history" class="section">
+            <div class="dashboard-header">
+                <h1 class="dashboard-title">Historique des détections</h1>
+                <p class="dashboard-subtitle">Archive complète des détections passées</p>
+            </div>
+            
+            <div class="filters-card">
+                <div class="filters-grid">
+                    <div class="filter-group">
+                        <label class="filter-label">Label</label>
+                        <select class="filter-select" id="historyLabelFilter">
+                            <option value="all">Tous les labels</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label class="filter-label">Date début</label>
+                        <input type="date" class="filter-select" id="startDate">
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label class="filter-label">Date fin</label>
+                        <input type="date" class="filter-select" id="endDate">
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label class="filter-label">Nombre</label>
+                        <select class="filter-select" id="historyLimit">
+                            <option value="50">50 résultats</option>
+                            <option value="100">100 résultats</option>
+                            <option value="200">200 résultats</option>
+                            <option value="500">500 résultats</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 16px;">
+                    <button class="refresh-btn" onclick="loadHistory()">Rechercher</button>
+                    <button class="clear-btn" onclick="showClearHistoryModal()" id="clearHistoryBtn">Vider l'historique</button>
+                </div>
+            </div>
+            
+            <!-- Modal de confirmation pour vider l'historique -->
+            <div id="clearHistoryModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;">
+                <div style="background: white; padding: 30px; border-radius: 12px; max-width: 500px; width: 90%;">
+                    <h3 style="margin-bottom: 15px; color: var(--danger);">⚠️ Confirmer la suppression</h3>
+                    <p style="margin-bottom: 20px; color: var(--dark);">Voulez-vous vraiment supprimer toutes les détections de l'historique ?</p>
+                    <p style="margin-bottom: 20px; color: var(--gray); font-size: 14px;">Cette action est irréversible. Toutes les données seront perdues.</p>
+                    
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="clearAllHistory()" style="padding: 12px 24px; background: var(--danger); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; flex: 1;">Oui, tout supprimer</button>
+                        <button onclick="hideClearHistoryModal()" style="padding: 12px 24px; background: var(--light); color: var(--dark); border: 1px solid var(--gray); border-radius: 8px; cursor: pointer; font-weight: 500; flex: 1;">Annuler</button>
+                    </div>
+                    
+                    <div style="margin-top: 20px; padding: 15px; background: #fef3c7; border-radius: 8px;">
+                        <p style="font-size: 12px; color: #92400e; margin: 0;">
+                            <strong>Note :</strong> Cette opération supprime uniquement les détections de la base de données. Les données MQTT ne seront pas affectées.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Modal de confirmation par période -->
+            <div id="clearPeriodModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;">
+                <div style="background: white; padding: 30px; border-radius: 12px; max-width: 500px; width: 90%;">
+                    <h3 style="margin-bottom: 15px; color: var(--warning);">🗑️ Supprimer par période</h3>
+                    <p style="margin-bottom: 20px; color: var(--dark);">Sélectionnez une période à supprimer :</p>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                            <div>
+                                <label style="font-size: 14px; font-weight: 500; color: var(--dark); display: block; margin-bottom: 5px;">Date début</label>
+                                <input type="date" id="clearStartDate" class="filter-select" style="width: 100%;">
+                            </div>
+                            <div>
+                                <label style="font-size: 14px; font-weight: 500; color: var(--dark); display: block; margin-bottom: 5px;">Date fin</label>
+                                <input type="date" id="clearEndDate" class="filter-select" style="width: 100%;">
+                            </div>
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <label style="font-size: 14px; font-weight: 500; color: var(--dark); display: block; margin-bottom: 5px;">Label spécifique (optionnel)</label>
+                            <select id="clearLabelFilter" class="filter-select" style="width: 100%;">
+                                <option value="all">Tous les labels</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="clearHistoryByPeriod()" style="padding: 12px 24px; background: var(--warning); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; flex: 1;">Supprimer la période</button>
+                        <button onclick="hideClearPeriodModal()" style="padding: 12px 24px; background: var(--light); color: var(--dark); border: 1px solid var(--gray); border-radius: 8px; cursor: pointer; font-weight: 500; flex: 1;">Annuler</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Bouton de suppression par période -->
+            <div style="margin-top: 20px; margin-bottom: 20px; text-align: center;">
+                <button onclick="showClearPeriodModal()" class="clear-period-btn" style="padding: 10px 20px; background: var(--warning); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500;">
+                    🗑️ Supprimer par période
+                </button>
+            </div>
+            
+            <div class="detections-card">
+                <div class="detections-header">
+                    <h2 class="detections-title">Résultats historiques</h2>
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <span id="historyCount">0 résultats</span>
+                        <div class="status-indicator" id="historyStatus" style="display: none;">
+                            <span class="status-dot status-warning"></span>
+                            <span>Chargement...</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="historyResults">
+                    <table class="detections-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 50px;">
+                                    <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                                </th>
+                                <th>ID</th>
+                                <th>Label</th>
+                                <th>Position</th>
+                                <th>Date/Heure</th>
+                                <th>Dimensions</th>
+                                <th style="width: 80px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody"></tbody>
+                    </table>
+                </div>
+                
+                <!-- Boutons d'actions groupées -->
+                <div id="batchActions" style="display: none; margin-top: 20px; padding: 15px; background: var(--light); border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span id="selectedCount">0 détections sélectionnées</span>
+                        <div style="display: flex; gap: 10px;">
+                            <button onclick="deleteSelectedDetections()" class="delete-selected-btn" style="padding: 8px 16px; background: var(--danger); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">
+                                Supprimer la sélection
+                            </button>
+                            <button onclick="clearSelection()" class="clear-selection-btn" style="padding: 8px 16px; background: var(--light); color: var(--dark); border: 1px solid var(--gray); border-radius: 6px; cursor: pointer; font-size: 14px;">
+                                Tout désélectionner
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="pagination" id="historyPagination"></div>
+            </div>
+        </section>
+        
+        <!-- Labels Section -->
+        <section id="labels" class="section">
+            <div class="dashboard-header">
+                <h1 class="dashboard-title">Gestion des labels</h1>
+                <p class="dashboard-subtitle">Catégories d'objets détectés</p>
+            </div>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <span class="stat-title">Total labels</span>
+                        <span class="stat-icon">🏷️</span>
+                    </div>
+                    <div class="stat-value" id="totalLabels">-</div>
+                    <div class="stat-change">Catégories uniques</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <span class="stat-title">Label fréquent</span>
+                        <span class="stat-icon">🏆</span>
+                    </div>
+                    <div class="stat-value" id="topLabel">-</div>
+                    <div class="stat-change" id="topLabelCount">- détections</div>
+                </div>
+            </div>
+            
+            <div class="detections-card">
+                <div class="detections-header">
+                    <h2 class="detections-title">Statistiques par label</h2>
+                    <button class="refresh-btn" onclick="loadLabelStats()">Actualiser</button>
+                </div>
+                
+                <div id="labelsStats">
+                    <table class="detections-table">
+                        <thead>
+                            <tr>
+                                <th>Label</th>
+                                <th>Détections</th>
+                                <th>Première détection</th>
+                                <th>Dernière détection</th>
+                                <th>Fréquence</th>
+                            </tr>
+                        </thead>
+                        <tbody id="labelsTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+        
+        <!-- System Section -->
+        <section id="system" class="section">
+            <div class="dashboard-header">
+                <h1 class="dashboard-title">État du système</h1>
+                <p class="dashboard-subtitle">Informations techniques et monitoring</p>
+            </div>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <span class="stat-title">MQTT</span>
+                        <span class="stat-icon">📡</span>
+                    </div>
+                    <div class="stat-value" id="mqttStatusText">-</div>
+                    <div class="stat-change" id="mqttBroker">-</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <span class="stat-title">MongoDB</span>
+                        <span class="stat-icon">🗄️</span>
+                    </div>
+                    <div class="stat-value" id="mongoStatus">-</div>
+                    <div class="stat-change" id="mongoDatabase">-</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <span class="stat-title">ESP32-CAM</span>
+                        <span class="stat-icon">📷</span>
+                    </div>
+                    <div class="stat-value" id="esp32Status">-</div>
+                    <div class="stat-change" id="esp32Uptime">-</div>
+                </div>
+            </div>
+            
+            <div class="detections-card">
+                <div class="detections-header">
+                    <h2 class="detections-title">Logs système</h2>
+                    <button class="refresh-btn" onclick="clearLogs()">Effacer les logs</button>
+                </div>
+                
+                <div id="systemLogs" style="background: #f8f9fa; padding: 20px; border-radius: 8px; font-family: monospace; max-height: 400px; overflow-y: auto;">
+                    <div class="log-entry">[Système] Initialisation du dashboard...</div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // Configuration
+        const API_URL = '/api';
+        
+        let mqttClient;
+        let currentPage = 1;
+        let totalPages = 1;
+        let selectedDetections = new Set();
+        let currentDetections = [];
+        
+        // Vérifier l'authentification
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/auth/check', {
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                
+                if (!data.authenticated) {
+                    console.log('❌ Non authentifié, redirection vers /login');
+                    window.location.href = '/login';
+                    return;
+                }
+                
+                console.log('✅ Authentifié en tant que:', data.user.username);
+                document.getElementById('userAvatar').textContent = 
+                    data.user?.username?.charAt(0)?.toUpperCase() || 'A';
+                    
+                // Charger les données après authentification
+                loadInitialData();
+                    
+            } catch (error) {
+                console.error('Erreur vérification authentification:', error);
+                window.location.href = '/login';
+            }
+        }
+        
+        // Navigation
+        function showSection(sectionId) {
+            console.log('📂 Changement de section vers:', sectionId);
+            
+            // Mettre à jour le menu
+            document.querySelectorAll('.menu-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.currentTarget.classList.add('active');
+            
+            // Afficher la section
+            document.querySelectorAll('.section').forEach(section => {
+                section.classList.remove('active');
+            });
+            document.getElementById(sectionId).classList.add('active');
+            
+            // Charger les données de la section
+            switch(sectionId) {
+                case 'dashboard':
+                    loadDashboardData();
+                    break;
+                case 'detections':
+                    connectMQTT();
+                    break;
+                case 'history':
+                    loadLabelsForFilter();
+                    loadHistory();
+                    break;
+                case 'labels':
+                    loadLabelStats();
+                    break;
+                case 'system':
+                    loadSystemStatus();
+                    break;
+            }
+        }
+        
+        // Déconnexion
+        async function logout() {
+            try {
+                const response = await fetch('/api/auth/logout', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    console.log('✅ Déconnexion réussie');
+                    localStorage.clear();
+                    window.location.href = '/login';
+                }
+            } catch (error) {
+                console.error('Erreur lors de la déconnexion:', error);
+                window.location.href = '/login';
+            }
+        }
+        
+        // Charger les données initiales
+        function loadInitialData() {
+            loadDashboardData();
+            connectMQTT();
+            loadLabelsForFilter();
+        }
+        
+        // Charger les données du dashboard
+        async function loadDashboardData() {
+            try {
+                console.log('📊 Chargement des données du dashboard...');
+                
+                // Charger les stats
+                const statsRes = await fetch(`${API_URL}/stats`, {
+                    credentials: 'include'
+                });
+                
+                if (!statsRes.ok) {
+                    throw new Error('Erreur stats: ' + statsRes.status);
+                }
+                
+                const stats = await statsRes.json();
+                
+                if (stats.success) {
+                    document.getElementById('totalDetections').textContent = stats.stats.total_detections;
+                    document.getElementById('activeLabels').textContent = stats.stats.top_objects.length;
+                    console.log('✅ Stats chargées');
+                }
+                
+                // Charger les labels pour le filtre
+                const labelsRes = await fetch(`${API_URL}/labels`, {
+                    credentials: 'include'
+                });
+                const labels = await labelsRes.json();
+                
+                if (labels.success) {
+                    const filter = document.getElementById('labelFilter');
+                    filter.innerHTML = '<option value="all">Tous les labels</option>';
+                    labels.data.forEach(label => {
+                        const option = document.createElement('option');
+                        option.value = label;
+                        option.textContent = label;
+                        filter.appendChild(option);
+                    });
+                    console.log('✅ Labels chargés:', labels.data.length);
+                }
+                
+                // Charger les détections récentes
+                loadRecentDetections();
+                
+                // Mettre à jour le statut système
+                updateSystemStatus();
+                
+            } catch (error) {
+                console.error('Erreur chargement dashboard:', error);
+                showError('Impossible de charger les données du dashboard');
+            }
+        }
+        
+        // Charger les détections récentes
+        async function loadRecentDetections() {
+            try {
+                const res = await fetch(`${API_URL}/detections/detected?limit=10`, {
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                
+                const tbody = document.getElementById('detectionsTableBody');
+                
+                if (!data.success || data.data.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="5" class="empty-state">
+                                <div class="empty-icon">📭</div>
+                                <p>Aucune détection récente</p>
+                            </td>
+                        </tr>
+                    `;
+                    return;
+                }
+                
+                tbody.innerHTML = data.data.map(detection => `
+                    <tr>
+                        <td>${detection._id?.toString().substring(18, 24) || '-'}</td>
+                        <td><span class="label-badge ${detection.label || 'unknown'}">${detection.label || 'Inconnu'}</span></td>
+                        <td>(${detection.x || 0}, ${detection.y || 0})</td>
+                        <td>${new Date(detection.timestamp).toLocaleString()}</td>
+                        <td>
+                            <span class="status-indicator">
+                                <span class="status-dot ${detection.detected ? 'status-online' : 'status-offline'}"></span>
+                                <span>${detection.detected ? 'Détecté' : 'Non détecté'}</span>
+                            </span>
+                        </td>
+                    </tr>
+                `).join('');
+                
+                console.log('✅ Détections récentes chargées:', data.data.length);
+                
+            } catch (error) {
+                console.error('Erreur chargement détections:', error);
+                const tbody = document.getElementById('detectionsTableBody');
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="empty-state">
+                            <div class="empty-icon">⚠️</div>
+                            <p>Erreur de chargement</p>
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+        
+        // Connexion MQTT
+        function connectMQTT() {
+            console.log('🔌 Connexion MQTT en cours...');
+            
+            // Configuration MQTT
+            const MQTT_BROKER = "029c7e99bf2d4fbba3302015c8340195.s1.eu.hivemq.cloud";
+            const MQTT_PORT = 8884;
+            const MQTT_USERNAME = "haboub";
+            const MQTT_PASSWORD = "Haboub23";
+            
+            try {
+                if (typeof Paho === 'undefined') {
+                    console.error('❌ Paho MQTT non chargé');
+                    updateMQTTStatus('Bibliothèque MQTT manquante', 'danger');
+                    return;
+                }
+                
+                const clientId = "Dashboard_" + Math.random().toString(16).substr(2, 8);
+                mqttClient = new Paho.MQTT.Client(MQTT_BROKER, MQTT_PORT, clientId);
+                
+                mqttClient.onConnectionLost = onConnectionLost;
+                mqttClient.onMessageArrived = onMessageArrived;
+                
+                const options = {
+                    useSSL: true,
+                    userName: MQTT_USERNAME,
+                    password: MQTT_PASSWORD,
+                    onSuccess: onConnect,
+                    onFailure: onFailure,
+                    timeout: 10,
+                    keepAliveInterval: 60
+                };
+                
+                mqttClient.connect(options);
+                
+            } catch (error) {
+                console.error('Erreur connexion MQTT:', error);
+                updateMQTTStatus('Erreur de connexion', 'danger');
+            }
+        }
+        
+        function onConnect() {
+            console.log('✅ MQTT connecté');
+            updateMQTTStatus('connecté', 'success');
+            
+            mqttClient.subscribe("esp32cam/detection");
+            mqttClient.subscribe("esp32cam/status");
+            
+            const liveStream = document.getElementById('liveStream');
+            if (liveStream) {
+                liveStream.innerHTML = `
+                    <div style="padding: 20px; text-align: center;">
+                        <div style="font-size: 48px; margin-bottom: 20px;">📡</div>
+                        <p style="color: var(--success); font-weight: 600;">Connecté au flux MQTT</p>
+                        <p style="color: #666; font-size: 14px; margin-top: 8px;">En attente des détections...</p>
+                    </div>
+                `;
+            }
+            
+            document.getElementById('esp32Status').textContent = 'Connecté';
+            document.getElementById('esp32Uptime').textContent = 'MQTT actif';
+        }
+        
+        function onFailure(error) {
+            console.error('❌ Échec connexion MQTT:', error);
+            updateMQTTStatus('déconnecté', 'danger');
+            
+            setTimeout(connectMQTT, 5000);
+        }
+        
+        function onConnectionLost(responseObject) {
+            console.error('❌ Connexion MQTT perdue:', responseObject.errorMessage);
+            updateMQTTStatus('déconnecté', 'danger');
+            
+            setTimeout(connectMQTT, 5000);
+        }
+        
+        function onMessageArrived(message) {
+            console.log('📨 Message MQTT reçu:', message.destinationName);
+            
+            try {
+                const payload = JSON.parse(message.payloadString);
+                
+                if (message.destinationName === "esp32cam/detection") {
+                    handleDetection(payload);
+                } else if (message.destinationName === "esp32cam/status") {
+                    handleStatus(payload);
+                }
+            } catch (error) {
+                console.error('Erreur parsing message MQTT:', error);
+            }
+        }
+        
+        function handleDetection(data) {
+            console.log('🎯 Détection reçue:', data);
+            
+            const liveCount = document.getElementById('liveCount');
+            if (liveCount) {
+                liveCount.textContent = (parseInt(liveCount.textContent) || 0) + 1;
+                document.getElementById('liveStatus').innerHTML = '📡 En temps réel';
+            }
+            
+            if (data.detected) {
+                const streamDiv = document.getElementById('liveStream');
+                if (streamDiv) {
+                    const detectionHTML = `
+                        <div style="background: #dcfce7; border-radius: 12px; padding: 24px; margin-bottom: 16px;">
+                            <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+                                <div style="font-size: 32px;">🎯</div>
+                                <div>
+                                    <h3 style="font-size: 18px; font-weight: 600; color: #166534;">${data.label || 'Inconnu'}</h3>
+                                    <p style="color: #666; font-size: 14px;">${new Date().toLocaleTimeString()}</p>
+                                </div>
+                            </div>
+                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                                <div style="background: white; padding: 12px; border-radius: 8px;">
+                                    <div style="font-size: 12px; color: #666;">Position</div>
+                                    <div style="font-weight: 600;">(${data.x || 0}, ${data.y || 0})</div>
+                                </div>
+                                <div style="background: white; padding: 12px; border-radius: 8px;">
+                                    <div style="font-size: 12px; color: #666;">Confiance</div>
+                                    <div style="font-weight: 600;">${((data.proba || 0) * 100).toFixed(1)}%</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    streamDiv.innerHTML = detectionHTML + streamDiv.innerHTML;
+                    
+                    if (streamDiv.children.length > 10) {
+                        streamDiv.removeChild(streamDiv.lastChild);
+                    }
+                }
+                
+                if (Math.random() < 0.3) {
+                    loadDashboardData();
+                }
+            }
+        }
+        
+        function handleStatus(data) {
+            console.log('📊 Statut ESP32:', data);
+            
+            const esp32Status = document.getElementById('esp32Status');
+            const esp32Uptime = document.getElementById('esp32Uptime');
+            
+            if (esp32Status && esp32Uptime) {
+                esp32Status.textContent = data.status === 'online' ? 'En ligne' : 'Hors ligne';
+                esp32Uptime.textContent = data.uptime ? `${Math.floor(data.uptime / 60)} min` : 'Statut inconnu';
+            }
+        }
+        
+        // Gestion de l'historique
+        async function loadHistory() {
+            try {
+                showHistoryStatus('Chargement...', 'warning');
+                clearSelection();
+                
+                const label = document.getElementById('historyLabelFilter').value;
+                const startDate = document.getElementById('startDate').value;
+                const endDate = document.getElementById('endDate').value;
+                const limit = document.getElementById('historyLimit').value;
+                
+                let url = `${API_URL}/detections`;
+                const params = new URLSearchParams();
+                
+                if (label !== 'all') {
+                    params.append('label', label);
+                }
+                
+                if (startDate && endDate) {
+                    params.append('startDate', startDate);
+                    params.append('endDate', endDate);
+                }
+                
+                params.append('limit', limit);
+                
+                if (params.toString()) {
+                    url += '?' + params.toString();
+                }
+                
+                const res = await fetch(url, {
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                
+                const tbody = document.getElementById('historyTableBody');
+                const countSpan = document.getElementById('historyCount');
+                
+                if (!data.success || data.data.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="7" class="empty-state">
+                                <div class="empty-icon">📭</div>
+                                <p>Aucune donnée historique</p>
+                            </td>
+                        </tr>
+                    `;
+                    countSpan.textContent = '0 résultats';
+                    showHistoryStatus('Aucune donnée', 'warning');
+                    return;
+                }
+                
+                currentDetections = data.data;
+                
+                tbody.innerHTML = data.data.map(detection => {
+                    const detectionId = detection._id?.toString() || Math.random().toString();
+                    return `
+                        <tr>
+                            <td>
+                                <input type="checkbox" class="detection-checkbox" 
+                                       data-id="${detectionId}"
+                                       onchange="toggleDetection(this, '${detectionId}')">
+                            </td>
+                            <td>${detection._id?.toString().substring(18, 24) || '-'}</td>
+                            <td><span class="label-badge ${detection.label || 'unknown'}">${detection.label || 'Inconnu'}</span></td>
+                            <td>(${detection.x || 0}, ${detection.y || 0})</td>
+                            <td>${new Date(detection.timestamp).toLocaleString()}</td>
+                            <td>${detection.width || 0}×${detection.height || 0}</td>
+                            <td>
+                                <button onclick="deleteSingleDetection('${detectionId}')" 
+                                        style="padding: 4px 8px; background: var(--danger); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                                    Supprimer
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+                
+                countSpan.textContent = `${data.data.length} résultats`;
+                showHistoryStatus('Chargement terminé', 'success');
+                
+                updatePagination(data.total || data.data.length, limit);
+                
+            } catch (error) {
+                console.error('Erreur chargement historique:', error);
+                showHistoryStatus('Erreur de chargement', 'danger');
+            }
+        }
+        
+        // Charger les labels pour les filtres
+        async function loadLabelsForFilter() {
+            try {
+                const res = await fetch(`${API_URL}/labels`, {
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    const filters = [
+                        'historyLabelFilter',
+                        'clearLabelFilter'
+                    ];
+                    
+                    filters.forEach(filterId => {
+                        const filter = document.getElementById(filterId);
+                        if (filter) {
+                            filter.innerHTML = '<option value="all">Tous les labels</option>';
+                            data.data.forEach(label => {
+                                const option = document.createElement('option');
+                                option.value = label;
+                                option.textContent = label;
+                                filter.appendChild(option);
+                            });
+                        }
+                    });
+                    
+                    console.log('✅ Labels chargés pour filtre:', data.data.length);
+                }
+            } catch (error) {
+                console.error('Erreur chargement labels:', error);
+            }
+        }
+        
+        // Statistiques des labels
+        async function loadLabelStats() {
+            try {
+                const res = await fetch(`${API_URL}/stats`, {
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    const tbody = document.getElementById('labelsTableBody');
+                    
+                    document.getElementById('totalLabels').textContent = data.stats.top_objects.length;
+                    
+                    if (data.stats.top_objects.length > 0) {
+                        const top = data.stats.top_objects[0];
+                        document.getElementById('topLabel').textContent = top._id;
+                        document.getElementById('topLabelCount').textContent = `${top.count} détections`;
+                    }
+                    
+                    if (tbody) {
+                        tbody.innerHTML = data.stats.top_objects.map(obj => `
+                            <tr>
+                                <td><span class="label-badge ${obj._id}">${obj._id}</span></td>
+                                <td>${obj.count}</td>
+                                <td>${obj.last_detection ? new Date(obj.last_detection).toLocaleDateString() : '-'}</td>
+                                <td>${obj.last_detection ? new Date(obj.last_detection).toLocaleTimeString() : '-'}</td>
+                                <td>${((obj.count / data.stats.objects_detected) * 100).toFixed(1)}%</td>
+                            </tr>
+                        `).join('');
+                    }
+                    
+                    console.log('✅ Statistiques labels chargées');
+                }
+            } catch (error) {
+                console.error('Erreur chargement stats labels:', error);
+            }
+        }
+        
+        // Statut système
+        async function loadSystemStatus() {
+            try {
+                const healthRes = await fetch('/health');
+                const health = await healthRes.json();
+                
+                document.getElementById('mqttStatusText').textContent = health.services.mqtt === 'connected' ? 'Connecté' : 'Déconnecté';
+                document.getElementById('mqttBroker').textContent = health.services.mqtt === 'connected' ? 'MQTT actif' : 'MQTT inactif';
+                document.getElementById('mongoStatus').textContent = health.services.mongodb === 'connected' ? 'Connecté' : 'Déconnecté';
+                document.getElementById('mongoDatabase').textContent = 'Base de données';
+                
+                addLog('[Système] Statut vérifié: ' + JSON.stringify(health.services));
+                
+            } catch (error) {
+                console.error('Erreur chargement statut système:', error);
+                addLog('[Erreur] Impossible de charger le statut système');
+            }
+        }
+        
+        // Fonctions pour les modals
+        function showClearHistoryModal() {
+            document.getElementById('clearHistoryModal').style.display = 'flex';
+            document.getElementById('clearHistoryModal').style.animation = 'fadeIn 0.3s';
+        }
+        
+        function hideClearHistoryModal() {
+            document.getElementById('clearHistoryModal').style.display = 'none';
+        }
+        
+        function showClearPeriodModal() {
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 7);
+            
+            document.getElementById('clearStartDate').value = yesterday.toISOString().split('T')[0];
+            document.getElementById('clearEndDate').value = today.toISOString().split('T')[0];
+            
+            loadLabelsForClearModal();
+            
+            document.getElementById('clearPeriodModal').style.display = 'flex';
+            document.getElementById('clearPeriodModal').style.animation = 'fadeIn 0.3s';
+        }
+        
+        function hideClearPeriodModal() {
+            document.getElementById('clearPeriodModal').style.display = 'none';
+        }
+        
+        async function loadLabelsForClearModal() {
+            try {
+                const res = await fetch(`${API_URL}/labels`, {
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    const filter = document.getElementById('clearLabelFilter');
+                    filter.innerHTML = '<option value="all">Tous les labels</option>';
+                    data.data.forEach(label => {
+                        const option = document.createElement('option');
+                        option.value = label;
+                        option.textContent = label;
+                        filter.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Erreur chargement labels:', error);
+            }
+        }
+        
+        // Fonction pour vider tout l'historique
+        async function clearAllHistory() {
+            try {
+                showHistoryStatus('Suppression en cours...', 'warning');
+                
+                const response = await fetch(`${API_URL}/detections`, {
+                    method: 'DELETE',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        startDate: null,
+                        endDate: null,
+                        label: 'all'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showHistoryStatus(`${data.deletedCount} détections supprimées`, 'success');
+                    addLog(`[Historique] ${data.deletedCount} détections supprimées`);
+                    
+                    setTimeout(() => {
+                        loadHistory();
+                        hideClearHistoryModal();
+                    }, 1500);
+                    
+                    loadDashboardData();
+                } else {
+                    showHistoryStatus('Erreur lors de la suppression', 'danger');
+                    console.error('Erreur suppression:', data.error);
+                }
+                
+            } catch (error) {
+                console.error('Erreur suppression historique:', error);
+                showHistoryStatus('Erreur de connexion', 'danger');
+            }
+        }
+        
+        // Fonction pour supprimer par période
+        async function clearHistoryByPeriod() {
+            const startDate = document.getElementById('clearStartDate').value;
+            const endDate = document.getElementById('clearEndDate').value;
+            const label = document.getElementById('clearLabelFilter').value;
+            
+            if (!startDate || !endDate) {
+                alert('Veuillez sélectionner une période valide');
+                return;
+            }
+            
+            try {
+                showHistoryStatus('Suppression de la période...', 'warning');
+                
+                const response = await fetch(`${API_URL}/detections`, {
+                    method: 'DELETE',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        startDate: startDate,
+                        endDate: endDate,
+                        label: label !== 'all' ? label : null
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showHistoryStatus(`${data.deletedCount} détections supprimées`, 'success');
+                    addLog(`[Historique] ${data.deletedCount} détections supprimées (${startDate} à ${endDate})`);
+                    
+                    setTimeout(() => {
+                        loadHistory();
+                        hideClearPeriodModal();
+                    }, 1500);
+                    
+                    loadDashboardData();
+                } else {
+                    showHistoryStatus('Erreur lors de la suppression', 'danger');
+                    console.error('Erreur suppression:', data.error);
+                }
+                
+            } catch (error) {
+                console.error('Erreur suppression période:', error);
+                showHistoryStatus('Erreur de connexion', 'danger');
+            }
+        }
+        
+        // Fonctions pour la sélection multiple
+        function toggleSelectAll() {
+            const selectAll = document.getElementById('selectAll').checked;
+            const checkboxes = document.querySelectorAll('.detection-checkbox');
+            
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = selectAll;
+                const detectionId = checkbox.getAttribute('data-id');
+                
+                if (selectAll) {
+                    selectedDetections.add(detectionId);
+                } else {
+                    selectedDetections.delete(detectionId);
+                }
+            });
+            
+            updateBatchActions();
+        }
+        
+        function toggleDetection(checkbox, detectionId) {
+            if (checkbox.checked) {
+                selectedDetections.add(detectionId);
+            } else {
+                selectedDetections.delete(detectionId);
+            }
+            
+            const allChecked = document.querySelectorAll('.detection-checkbox:checked').length === 
+                             document.querySelectorAll('.detection-checkbox').length;
+            document.getElementById('selectAll').checked = allChecked;
+            
+            updateBatchActions();
+        }
+        
+        function updateBatchActions() {
+            const batchActions = document.getElementById('batchActions');
+            const selectedCount = document.getElementById('selectedCount');
+            
+            if (selectedDetections.size > 0) {
+                batchActions.style.display = 'block';
+                selectedCount.textContent = `${selectedDetections.size} détections sélectionnées`;
+            } else {
+                batchActions.style.display = 'none';
+            }
+        }
+        
+        function clearSelection() {
+            selectedDetections.clear();
+            document.querySelectorAll('.detection-checkbox').forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            document.getElementById('selectAll').checked = false;
+            updateBatchActions();
+        }
+        
+        async function deleteSelectedDetections() {
+            if (selectedDetections.size === 0) {
+                alert('Aucune détection sélectionnée');
+                return;
+            }
+            
+            if (!confirm(`Voulez-vous vraiment supprimer ${selectedDetections.size} détection(s) ?`)) {
+                return;
+            }
+            
+            try {
+                showHistoryStatus('Suppression en cours...', 'warning');
+                
+                let deletedCount = 0;
+                
+                for (const detectionId of selectedDetections) {
+                    try {
+                        const detection = currentDetections.find(d => 
+                            d._id === detectionId || 
+                            (d._id && d._id.toString() === detectionId)
+                        );
+                        
+                        if (detection) {
+                            const response = await fetch(`${API_URL}/detections`, {
+                                method: 'DELETE',
+                                credentials: 'include',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    startDate: detection.timestamp,
+                                    endDate: detection.timestamp,
+                                    label: detection.label
+                                })
+                            });
+                            
+                            const data = await response.json();
+                            if (data.success) {
+                                deletedCount++;
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Erreur suppression détection:', error);
+                    }
+                }
+                
+                showHistoryStatus(`${deletedCount} détections supprimées`, 'success');
+                addLog(`[Historique] ${deletedCount} détections sélectionnées supprimées`);
+                
+                clearSelection();
+                setTimeout(() => {
+                    loadHistory();
+                }, 1000);
+                
+                loadDashboardData();
+                
+            } catch (error) {
+                console.error('Erreur suppression sélection:', error);
+                showHistoryStatus('Erreur lors de la suppression', 'danger');
+            }
+        }
+        
+        async function deleteSingleDetection(detectionId) {
+            if (!confirm('Voulez-vous vraiment supprimer cette détection ?')) {
+                return;
+            }
+            
+            try {
+                showHistoryStatus('Suppression...', 'warning');
+                
+                const detection = currentDetections.find(d => 
+                    d._id?.toString() === detectionId
+                );
+                
+                if (detection) {
+                    const response = await fetch(`${API_URL}/detections`, {
+                        method: 'DELETE',
+                        credentials: 'include',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            startDate: detection.timestamp,
+                            endDate: detection.timestamp,
+                            label: detection.label
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        showHistoryStatus('Détection supprimée', 'success');
+                        addLog(`[Historique] Détection ${detectionId.substring(0, 8)} supprimée`);
+                        
+                        setTimeout(() => {
+                            loadHistory();
+                            loadDashboardData();
+                        }, 1000);
+                    } else {
+                        showHistoryStatus('Erreur de suppression', 'danger');
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Erreur suppression détection:', error);
+                showHistoryStatus('Erreur de connexion', 'danger');
+            }
+        }
+        
+        function showHistoryStatus(message, type) {
+            const statusDiv = document.getElementById('historyStatus');
+            const dot = statusDiv.querySelector('.status-dot');
+            const text = statusDiv.querySelector('span:last-child');
+            
+            statusDiv.style.display = 'flex';
+            dot.className = 'status-dot';
+            dot.classList.add(`status-${type}`);
+            text.textContent = message;
+            
+            if (type === 'success') {
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 3000);
+            }
+        }
+        
+        // Fonctions utilitaires
+        function updateMQTTStatus(status, type) {
+            const dot = document.getElementById('mqttDot');
+            const statusSpan = document.getElementById('mqttStatus');
+            
+            if (dot && statusSpan) {
+                dot.className = 'status-dot';
+                dot.classList.add(`status-${type}`);
+                statusSpan.textContent = `MQTT: ${status}`;
+            }
+            
+            const systemStatus = document.getElementById('systemStatus');
+            if (systemStatus) {
+                systemStatus.textContent = type === 'success' ? 'Normal' : 'Erreur';
+            }
+            
+            addLog(`[MQTT] ${status}`);
+        }
+        
+        function updateSystemStatus() {
+            setInterval(() => {
+                const now = new Date();
+                const systemUptime = document.getElementById('systemUptime');
+                if (systemUptime) {
+                    systemUptime.textContent = now.toLocaleTimeString();
+                }
+            }, 1000);
+        }
+        
+        function updatePagination(totalItems, itemsPerPage) {
+            totalPages = Math.ceil(totalItems / itemsPerPage);
+            const pagination = document.getElementById('historyPagination');
+            
+            if (!pagination) return;
+            
+            let html = '';
+            if (currentPage > 1) {
+                html += `<button class="pagination-btn" onclick="changePage(${currentPage - 1})">Précédent</button>`;
+            }
+            
+            for (let i = 1; i <= Math.min(totalPages, 5); i++) {
+                html += `<button class="pagination-btn ${i === currentPage ? 'active' : ''}" onclick="changePage(${i})">${i}</button>`;
+            }
+            
+            if (currentPage < totalPages) {
+                html += `<button class="pagination-btn" onclick="changePage(${currentPage + 1})">Suivant</button>`;
+            }
+            
+            pagination.innerHTML = html;
+        }
+        
+        function changePage(page) {
+            currentPage = page;
+            loadHistory();
+        }
+        
+        function addLog(message) {
+            const logsDiv = document.getElementById('systemLogs');
+            if (logsDiv) {
+                const logEntry = document.createElement('div');
+                logEntry.className = 'log-entry';
+                logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+                logsDiv.insertBefore(logEntry, logsDiv.firstChild);
+                
+                if (logsDiv.children.length > 50) {
+                    logsDiv.removeChild(logsDiv.lastChild);
+                }
+            }
+        }
+        
+        function clearLogs() {
+            const logsDiv = document.getElementById('systemLogs');
+            if (logsDiv) {
+                logsDiv.innerHTML = '<div class="log-entry">[Système] Logs effacés</div>';
+            }
+        }
+        
+        function showError(message) {
+            console.error('❌ Erreur:', message);
+            addLog(`[Erreur] ${message}`);
+        }
+        
+        // Filtres
+        function filterByLabel() {
+            const label = document.getElementById('labelFilter').value;
+            console.log('🔍 Filtre label:', label);
+        }
+        
+        function filterByStatus() {
+            const status = document.getElementById('statusFilter').value;
+            console.log('🔍 Filtre statut:', status);
+        }
+        
+        function filterByPeriod() {
+            const period = document.getElementById('periodFilter').value;
+            console.log('🔍 Filtre période:', period);
+        }
+        
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('🚀 Dashboard initialisation...');
+            
+            checkAuth();
+            
+            addLog('[Système] Dashboard initialisé');
+            
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+            
+            document.getElementById('startDate').value = yesterday.toISOString().split('T')[0];
+            document.getElementById('endDate').value = today.toISOString().split('T')[0];
+            
+            console.log('✅ Dashboard prêt');
+        });
+        
+        window.onerror = function(msg, url, lineNo, columnNo, error) {
+            console.error('⚠️ Erreur JavaScript:', msg);
+            addLog(`[JavaScript Erreur] ${msg}`);
+            return false;
+        };
+    </script>
+</body>
+</html>
