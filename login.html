@@ -215,7 +215,9 @@
     </div>
 
     <script>
-        const API_URL = 'http://localhost:3000';
+        // Use the current origin so the app works when deployed (Render, etc.).
+        // If the file is opened via file://, fall back to localhost for local testing.
+        const API_URL = (window.location.protocol === 'file:') ? 'http://localhost:3000' : window.location.origin;
 
         // Fonction de connexion avec appel API
         async function login(event) {
