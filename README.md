@@ -1,3 +1,30 @@
+# EdgeVision - ESP32-CAM Object Detection System
+
+A complete IoT surveillance system using ESP32-CAM with Edge Impulse FOMO (Faster Objects, More Objects) for real-time object detection, MQTT communication, MongoDB storage, and a web dashboard.
+
+## 🚀 Live Demo
+- **Web Dashboard**: [https://edgevision.onrender.com/login](https://edgevision.onrender.com/login)
+
+## 🎯 Features
+
+- **Real-time Object Detection**: ESP32-CAM runs Edge Impulse FOMO model locally
+- **MQTT Communication**: Secure MQTT connection to HiveMQ Cloud
+- **MongoDB Storage**: All detections stored in MongoDB Atlas
+- **Web Dashboard**: Beautiful, responsive dashboard with authentication
+- **Live Streaming**: Real-time detection feed via MQTT
+- **Historical Data**: Browse, filter, and manage detection history
+- **Statistics**: Comprehensive analytics and label statistics
+- **Multi-user Support**: Session-based authentication system
+
+## 🏗️ System Architecture
+
+ESP32-CAM (Edge Impulse FOMO)
+↓
+MQTT Broker (HiveMQ Cloud)
+↓
+Node.js Server (Express + MongoDB)
+↓
+Web Dashboard (HTML/CSS/JS)
 
 ### Components:
 
