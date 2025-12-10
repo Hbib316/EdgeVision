@@ -27,6 +27,8 @@ const COLLECTION_STATUS = 'device_status';
 
 const PORT = process.env.PORT || 3000;
 const SESSION_SECRET = process.env.SESSION_SECRET || 'your-session-secret-change-in-production';
+// Frontend URL used for CORS. Set to '*' to allow all origins (use carefully).
+const FRONTEND_URL = process.env.FRONTEND_URL || `http://localhost:${PORT}`;
 
 // ============================================
 // VÉRIFICATION DES VARIABLES D'ENVIRONNEMENT
@@ -74,7 +76,8 @@ const app = express();
 // INITIALISATION EXPRESS
 // ============================================
 app.use(cors({
-    origin: 'http://localhost:' + PORT,
+    // Allow a configurable frontend origin (use FRONTEND_URL='*' to allow all origins)
+    origin: FRONTEND_URL === '*' ? true : FRONTEND_URL,
     credentials: true
 }));
 app.use(express.json());
@@ -824,7 +827,7 @@ app.use(express.static(__dirname, {
     extensions: ['html', 'htm', 'css', 'js', 'png', 'jpg', 'gif'],
     setHeaders: (res, path) => {
         // Définir les en-têtes CORS pour les fichiers statiques
-        res.setHeader('Access-Control-Allow-Origin', 'http://localhost:' + PORT);
+        res.setHeader('Access-Control-Allow-Origin', FRONTEND_URL === '*' ? '*' : FRONTEND_URL);
         res.setHeader('Access-Control-Allow-Credentials', 'true');
     }
 }));
@@ -871,9 +874,9 @@ async function startServer() {
         // Connexion MQTT
         connectMQTT();
         
-        // Démarrage du serveur Express
-        app.listen(PORT, () => {
-            console.log(`✅ Serveur API démarré sur http://localhost:${PORT}`);
+        // Démarrage du serveur Express (bind to 0.0.0.0 for hosting providers)
+        app.listen(PORT, '0.0.0.0', () => {
+            console.log(`✅ Serveur API démarré sur port ${PORT}`);
             console.log('\n📋 Points d\'accès disponibles:');
             console.log(`   WEB  /login              - Page de connexion`);
             console.log(`   WEB  /dashboard          - Tableau de bord (authentification requise)`);
