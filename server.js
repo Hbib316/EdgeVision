@@ -72,6 +72,12 @@ let statusCollection;
 let mqttClient;
 const app = express();
 
+// When running behind a proxy (like Render), trust the first proxy so
+// secure cookies and `req.protocol` are handled correctly.
+if (process.env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1);
+}
+
 // ============================================
 // INITIALISATION EXPRESS
 // ============================================
@@ -190,16 +196,25 @@ app.post('/api/auth/login', async (req, res) => {
                 role: 'admin',
                 loginTime: new Date()
             };
-            
-            console.log('✅ Connexion réussie pour:', username);
-            
-            res.json({
-                success: true,
-                message: 'Connexion réussie',
-                user: {
-                    username: 'admin',
-                    role: 'admin'
+
+            // Ensure the session is saved before sending the response so the
+            // Set-Cookie header reaches the browser and subsequent requests
+            // include the session cookie.
+            req.session.save((err) => {
+                if (err) {
+                    console.error('❌ Erreur sauvegarde session:', err);
+                    return res.status(500).json({ success: false, error: 'Erreur session' });
                 }
+
+                console.log('✅ Connexion réussie pour:', username);
+                res.json({
+                    success: true,
+                    message: 'Connexion réussie',
+                    user: {
+                        username: 'admin',
+                        role: 'admin'
+                    }
+                });
             });
         } else {
             console.log('❌ Connexion échouée pour:', username);
