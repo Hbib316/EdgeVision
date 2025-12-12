@@ -3,17 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Connexion - ESP32-CAM Dashboard</title>
+    <title>ESP32-CAM - Connexion</title>
     <style>
+        :root {
+            --primary: #2563eb;
+            --success: #10b981;
+            --danger: #ef4444;
+            --dark: #111827;
+            --light: #f9fafb;
+        }
+        
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         }
         
         body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--dark);
+            color: white;
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -22,123 +31,113 @@
         }
         
         .login-container {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 24px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             width: 100%;
-            max-width: 440px;
-            overflow: hidden;
+            max-width: 400px;
+            animation: fadeIn 0.5s ease;
         }
         
-        .login-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .login-card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 16px;
             padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .logo {
             text-align: center;
-            color: white;
+            margin-bottom: 30px;
         }
         
-        .login-header h1 {
-            font-size: 28px;
-            font-weight: 600;
-            margin-bottom: 8px;
+        .logo-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
         }
         
-        .login-header p {
-            opacity: 0.9;
+        .logo-text {
+            font-size: 24px;
+            font-weight: bold;
+            background: linear-gradient(90deg, var(--primary), var(--success));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #9ca3af;
+            margin-bottom: 30px;
             font-size: 14px;
         }
         
-        .login-form {
-            padding: 40px;
-        }
-        
         .form-group {
-            margin-bottom: 24px;
+            margin-bottom: 20px;
         }
         
         .form-label {
             display: block;
             margin-bottom: 8px;
-            font-weight: 500;
-            color: #374151;
+            color: #d1d5db;
             font-size: 14px;
+            font-weight: 500;
         }
         
         .form-input {
             width: 100%;
-            padding: 14px 16px;
-            border: 2px solid #e5e7eb;
-            border-radius: 12px;
+            padding: 14px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            color: white;
             font-size: 16px;
             transition: all 0.3s;
-            background: #f9fafb;
         }
         
         .form-input:focus {
             outline: none;
-            border-color: #667eea;
-            background: white;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            border-color: var(--primary);
+            background: rgba(255,255,255,0.12);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
         }
         
-        .login-btn {
+        .form-input::placeholder {
+            color: #6b7280;
+        }
+        
+        .btn {
             width: 100%;
-            padding: 16px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 14px;
+            background: var(--primary);
             color: white;
             border: none;
-            border-radius: 12px;
+            border-radius: 10px;
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: all 0.3s;
+            margin-top: 10px;
         }
         
-        .login-btn:hover:not(:disabled) {
+        .btn:hover {
+            background: #1d4ed8;
             transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+            box-shadow: 0 10px 20px rgba(37, 99, 235, 0.3);
         }
         
-        .login-btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        
-        .login-footer {
-            text-align: center;
-            padding: 20px;
-            border-top: 1px solid #e5e7eb;
-            color: #6b7280;
-            font-size: 14px;
-        }
-        
-        .logo {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-            margin-bottom: 20px;
-        }
-        
-        .logo-icon {
-            font-size: 32px;
+        .btn:active {
+            transform: translateY(0);
         }
         
         .error-message {
-            background: #fee;
-            border: 1px solid #fcc;
-            color: #c00;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-size: 14px;
-            display: none;
-        }
-
-        .success-message {
-            background: #efe;
-            border: 1px solid #cfc;
-            color: #0a0;
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #fca5a5;
             padding: 12px;
             border-radius: 8px;
             margin-bottom: 20px;
@@ -146,177 +145,195 @@
             display: none;
         }
         
-        .form-footer {
+        .footer {
             text-align: center;
-            margin-top: 24px;
+            margin-top: 30px;
             color: #6b7280;
-            font-size: 14px;
+            font-size: 12px;
         }
-
-        .loading-spinner {
+        
+        .spinner {
             display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid rgba(255, 255, 255, 0.3);
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
             border-radius: 50%;
             border-top-color: white;
-            animation: spin 0.6s linear infinite;
-            margin-left: 8px;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+            vertical-align: middle;
         }
-
+        
         @keyframes spin {
             to { transform: rotate(360deg); }
+        }
+        
+        /* Effets de transition */
+        .form-input, .btn {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        /* Responsive */
+        @media (max-width: 480px) {
+            .login-card {
+                padding: 30px 20px;
+            }
         }
     </style>
 </head>
 <body>
     <div class="login-container">
-        <div class="login-header">
-            <div class="logo">
-                <span class="logo-icon">🎯</span>
-                <h1>ESP32-CAM Dashboard</h1>
-            </div>
-            <p>Système de surveillance intelligente</p>
+        <div class="logo">
+            <div class="logo-icon">📷</div>
+            <div class="logo-text">ESP32-CAM Surveillance</div>
         </div>
         
-        <div class="login-form">
+        <div class="subtitle">
+            Système de surveillance intelligente par vision IA
+        </div>
+        
+        <div class="login-card">
             <div class="error-message" id="errorMessage">
                 Identifiants incorrects. Veuillez réessayer.
             </div>
-
-            <div class="success-message" id="successMessage">
-                Connexion réussie! Redirection...
-            </div>
             
-            <form id="loginForm" onsubmit="login(event)">
+            <form id="loginForm">
                 <div class="form-group">
-                    <label class="form-label">Nom d'utilisateur</label>
-                    <input type="text" class="form-input" id="username" placeholder="Entrez votre nom d'utilisateur" autocomplete="username" required>
+                    <label class="form-label" for="username">
+                        👤 Nom d'utilisateur
+                    </label>
+                    <input 
+                        type="text" 
+                        id="username" 
+                        class="form-input" 
+                        placeholder="admin" 
+                        required
+                        autofocus
+                    >
                 </div>
                 
                 <div class="form-group">
-                    <label class="form-label">Mot de passe</label>
-                    <input type="password" class="form-input" id="password" placeholder="Entrez votre mot de passe" autocomplete="current-password" required>
+                    <label class="form-label" for="password">
+                        🔒 Mot de passe
+                    </label>
+                    <input 
+                        type="password" 
+                        id="password" 
+                        class="form-input" 
+                        placeholder="••••••••" 
+                        required
+                    >
                 </div>
                 
-                <button type="submit" class="login-btn" id="loginBtn">
-                    <span id="btnText">Se connecter</span>
+                <button type="submit" class="btn" id="loginBtn">
+                    <span id="btnText">🔐 Se connecter</span>
+                    <span id="btnSpinner" class="spinner" style="display: none;"></span>
                 </button>
-                
-                <div class="form-footer">
-                    <p>Utilisateur démo: <strong>admin</strong> / Mot de passe: <strong>admin123</strong></p>
-                </div>
             </form>
-        </div>
-        
-        <div class="login-footer">
-            <p>© 2024 ESP32-CAM Surveillance System. Tous droits réservés.</p>
+            
+            <div class="footer">
+                <p>Version 2.0 • Accès réservé au personnel autorisé</p>
+                <p style="margin-top: 10px; font-size: 10px; opacity: 0.7;">
+                    En cas de problème, contactez l'administrateur système
+                </p>
+            </div>
         </div>
     </div>
 
     <script>
-        // Use the current origin so the app works when deployed (Render, etc.).
-        // If the file is opened via file://, fall back to localhost for local testing.
-        const API_URL = (window.location.protocol === 'file:') ? 'http://localhost:3000' : window.location.origin;
-
-        // Fonction de connexion avec appel API
-        async function login(event) {
-            event.preventDefault();
-            
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
+        document.addEventListener('DOMContentLoaded', () => {
+            const loginForm = document.getElementById('loginForm');
             const errorMessage = document.getElementById('errorMessage');
-            const successMessage = document.getElementById('successMessage');
             const loginBtn = document.getElementById('loginBtn');
             const btnText = document.getElementById('btnText');
+            const btnSpinner = document.getElementById('btnSpinner');
             
-            // Masquer les messages
-            errorMessage.style.display = 'none';
-            successMessage.style.display = 'none';
+            // Vérifier si l'utilisateur est déjà connecté
+            const token = localStorage.getItem('token');
+            if (token) {
+                window.location.href = '/dashboard.html';
+            }
             
-            // Désactiver le bouton et afficher le spinner
-            loginBtn.disabled = true;
-            btnText.innerHTML = 'Connexion en cours...<span class="loading-spinner"></span>';
-            
-            try {
-                // Appel API pour l'authentification
-                const response = await fetch(`${API_URL}/api/auth/login`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    credentials: 'include', // Important pour les cookies de session
-                    body: JSON.stringify({ username, password })
-                });
+            // Gestion de la soumission du formulaire
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
                 
-                const data = await response.json();
+                const username = document.getElementById('username').value.trim();
+                const password = document.getElementById('password').value;
                 
-                if (response.ok && data.success) {
-                    // Connexion réussie
-                    successMessage.style.display = 'block';
-                    successMessage.textContent = 'Connexion réussie! Redirection...';
-                    
-                    // Stocker les infos dans localStorage (pour compatibilité avec le code existant)
-                    localStorage.setItem('isAuthenticated', 'true');
-                    localStorage.setItem('username', data.user.username);
-                    
-                    // Rediriger après un court délai
-                    setTimeout(() => {
-                        window.location.href = '/dashboard';
-                    }, 1000);
-                } else {
-                    // Erreur de connexion
-                    errorMessage.style.display = 'block';
-                    errorMessage.textContent = data.error || 'Identifiants incorrects. Veuillez réessayer.';
-                    
-                    // Réactiver le bouton
-                    loginBtn.disabled = false;
-                    btnText.textContent = 'Se connecter';
-                    
-                    // Masquer le message après 3 secondes
-                    setTimeout(() => {
-                        errorMessage.style.display = 'none';
-                    }, 3000);
+                // Validation basique
+                if (!username || !password) {
+                    showError('Veuillez remplir tous les champs');
+                    return;
                 }
-            } catch (error) {
-                console.error('Erreur de connexion:', error);
+                
+                // Afficher le spinner
+                loginBtn.disabled = true;
+                btnText.style.display = 'none';
+                btnSpinner.style.display = 'inline-block';
+                
+                try {
+                    const response = await fetch('/api/auth/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ username, password })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        // Stocker le token JWT
+                        localStorage.setItem('token', data.token);
+                        
+                        // Redirection vers le dashboard
+                        window.location.href = '/dashboard.html';
+                    } else {
+                        showError(data.error || 'Identifiants incorrects');
+                        // Effacer le mot de passe
+                        document.getElementById('password').value = '';
+                        document.getElementById('password').focus();
+                    }
+                } catch (error) {
+                    console.error('Erreur de connexion:', error);
+                    showError('Erreur de connexion au serveur');
+                } finally {
+                    // Réinitialiser le bouton
+                    loginBtn.disabled = false;
+                    btnText.style.display = 'inline';
+                    btnSpinner.style.display = 'none';
+                }
+            });
+            
+            // Fonction pour afficher les erreurs
+            function showError(message) {
+                errorMessage.textContent = message;
                 errorMessage.style.display = 'block';
-                errorMessage.textContent = 'Erreur de connexion au serveur. Veuillez réessayer.';
                 
-                // Réactiver le bouton
-                loginBtn.disabled = false;
-                btnText.textContent = 'Se connecter';
-                
+                // Cacher l'erreur après 5 secondes
                 setTimeout(() => {
                     errorMessage.style.display = 'none';
-                }, 3000);
+                }, 5000);
             }
-        }
-        
-        // Vérifier si l'utilisateur est déjà connecté au chargement
-        async function checkExistingSession() {
-            try {
-                const response = await fetch(`${API_URL}/api/auth/check`, {
-                    credentials: 'include'
-                });
-                
-                const data = await response.json();
-                
-                if (data.success && data.authenticated) {
-                    // L'utilisateur a déjà une session active
-                    localStorage.setItem('isAuthenticated', 'true');
-                    localStorage.setItem('username', data.user.username);
-                    window.location.href = '/dashboard';
-                }
-            } catch (error) {
-                console.error('Erreur de vérification de session:', error);
-            }
-        }
-        
-        // Vérifier la session au chargement de la page
-        document.addEventListener('DOMContentLoaded', () => {
-            checkExistingSession();
+            
+            // Animation d'entrée pour les champs
+            const inputs = document.querySelectorAll('.form-input');
+            inputs.forEach((input, index) => {
+                input.style.animationDelay = `${index * 0.1}s`;
+                input.style.animation = 'fadeIn 0.5s ease forwards';
+                input.style.opacity = '0';
+            });
+            
+            // Focus automatique sur le champ username
             document.getElementById('username').focus();
+            
+            // Support de la touche Entrée
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !loginBtn.disabled) {
+                    loginForm.requestSubmit();
+                }
+            });
         });
     </script>
 </body>

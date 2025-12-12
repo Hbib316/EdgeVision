@@ -1,4 +1,6 @@
 #include <EDGE_inferencing.h>
+
+
 #include <eloquent_esp32cam.h>
 #include <eloquent_esp32cam/edgeimpulse/fomo.h>
 #include <WiFi.h>
@@ -10,8 +12,8 @@ using eloq::camera;
 using eloq::ei::fomo;
 
 // WiFi credentials
-const char* ssid = "cyberguards";
-const char* password = "1234567890";
+const char* ssid = "iPhone";
+const char* password = "haboub23";
 
 // MQTT HiveMQ Cloud credentials
 const char* mqtt_server = "029c7e99bf2d4fbba3302015c8340195.s1.eu.hivemq.cloud";
@@ -28,7 +30,7 @@ PubSubClient client(espClient);
 
 unsigned long lastReconnectAttempt = 0;
 unsigned long lastStatusUpdate = 0;
-const long statusInterval = 5000; // Send status every 5 seconds
+const long statusInterval = 30000; // Send status every 30 seconds
 
 void setup_wifi() {
     delay(10);
@@ -185,5 +187,5 @@ void loop() {
         Serial.println("Échec publication MQTT");
     }
 
-    delay(100);
+    delay(30000);
 }
