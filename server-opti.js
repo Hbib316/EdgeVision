@@ -1,4 +1,4 @@
-// server-opti.js - Serveur avec authentification
+// server-opti.js - Serveur avec authentification et statuts améliorés
 const mqtt = require('mqtt');
 const { MongoClient } = require('mongodb');
 const express = require('express');
@@ -21,6 +21,13 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
 // Variables globales
 let db, mqttClient;
 const activeClients = new Set();
+let serverStats = {
+    startTime: new Date(),
+    detectionCount: 0,
+    lastDetection: null,
+    mqttConnected: false,
+    dbConnected: false
+};
 
 // Initialisation Express
 const app = express();
@@ -64,48 +71,68 @@ function authenticateWebSocket(request) {
 
 // Initialiser la base de données avec un utilisateur par défaut
 async function initializeDatabase() {
-    // Vérifier si la collection users existe
-    const collections = await db.listCollections().toArray();
-    const usersCollectionExists = collections.some(col => col.name === 'users');
-    
-    if (!usersCollectionExists) {
-        await db.createCollection('users');
-        await db.collection('users').createIndex({ username: 1 }, { unique: true });
+    try {
+        // Vérifier si la collection users existe
+        const collections = await db.listCollections().toArray();
+        const usersCollectionExists = collections.some(col => col.name === 'users');
         
-        // Créer un utilisateur admin par défaut
-        const hashedPassword = await bcrypt.hash('admin123', 10);
-        await db.collection('users').insertOne({
-            username: 'admin',
-            password: hashedPassword,
-            role: 'admin',
-            createdAt: new Date(),
-            lastLogin: null
-        });
+        if (!usersCollectionExists) {
+            await db.createCollection('users');
+            await db.collection('users').createIndex({ username: 1 }, { unique: true });
+            
+            // Créer un utilisateur admin par défaut
+            const hashedPassword = await bcrypt.hash('admin123', 10);
+            await db.collection('users').insertOne({
+                username: 'admin',
+                password: hashedPassword,
+                role: 'admin',
+                createdAt: new Date(),
+                lastLogin: null
+            });
+            
+            console.log('✅ Utilisateur admin créé (admin / admin123)');
+        }
         
-        console.log('✅ Utilisateur admin créé (admin / admin123)');
+        serverStats.dbConnected = true;
+    } catch (error) {
+        console.error('❌ Erreur initialisation DB:', error);
+        serverStats.dbConnected = false;
     }
 }
 
 // Connexion MongoDB avec cache
 async function connectMongoDB() {
-    const client = await MongoClient.connect(MONGODB_URI, {
-        maxPoolSize: 5,
-        minPoolSize: 1,
-        maxIdleTimeMS: 30000
-    });
-    db = client.db(DB_NAME);
-    
-    // Création d'index optimisés
-    await db.collection('detections').createIndexes([
-        { key: { timestamp: -1 } },
-        { key: { detected: 1, timestamp: -1 } },
-        { key: { label: 1 } }
-    ]);
-    
-    // Initialiser la base de données
-    await initializeDatabase();
-    
-    console.log('✅ MongoDB connecté avec cache');
+    try {
+        const client = await MongoClient.connect(MONGODB_URI, {
+            maxPoolSize: 5,
+            minPoolSize: 1,
+            maxIdleTimeMS: 30000
+        });
+        db = client.db(DB_NAME);
+        
+        // Création d'index optimisés
+        await db.collection('detections').createIndexes([
+            { key: { timestamp: -1 } },
+            { key: { detected: 1, timestamp: -1 } },
+            { key: { label: 1 } }
+        ]);
+        
+        // Initialiser la base de données
+        await initializeDatabase();
+        
+        serverStats.dbConnected = true;
+        console.log('✅ MongoDB connecté avec cache');
+        
+        // Broadcaster le statut aux clients WebSocket
+        broadcastServerStatus();
+        
+    } catch (error) {
+        console.error('❌ Erreur MongoDB:', error);
+        serverStats.dbConnected = false;
+        
+        // Retry après 5 secondes
+        setTimeout(connectMongoDB, 5000);
+    }
 }
 
 // Fonction pour normaliser le timestamp
@@ -117,10 +144,7 @@ function normalizeTimestamp(timestamp) {
     // Si c'est un nombre
     if (typeof timestamp === 'number') {
         // Si c'est un petit nombre (< 10^10), c'est probablement millis() Arduino
-        // millis() Arduino retourne typiquement < 50 jours (4.3e9 ms)
         if (timestamp < 10000000000) {
-            // Convertir: timestamp serveur - millis Arduino + timestamp Arduino
-            // Simplification: utiliser timestamp serveur
             return new Date();
         } else {
             // Si c'est un grand nombre, c'est probablement un timestamp Unix en ms
@@ -140,50 +164,98 @@ function normalizeTimestamp(timestamp) {
     return new Date();
 }
 
-// Connexion MQTT
+// Connexion MQTT avec gestion améliorée
 function connectMQTT() {
-    mqttClient = mqtt.connect(MQTT_BROKER, {
-        username: process.env.MQTT_USERNAME,
-        password: process.env.MQTT_PASSWORD
-    });
+    try {
+        mqttClient = mqtt.connect(MQTT_BROKER, {
+            username: process.env.MQTT_USERNAME,
+            password: process.env.MQTT_PASSWORD,
+            reconnectPeriod: 5000,
+            connectTimeout: 30000
+        });
 
-    mqttClient.on('connect', () => {
-        console.log('✅ MQTT connecté');
-        mqttClient.subscribe('esp32cam/detection');
-    });
-
-    mqttClient.on('message', async (topic, message) => {
-        try {
-            const data = JSON.parse(message.toString());
-            
-            // Normaliser le timestamp
-            data.timestamp = normalizeTimestamp(data.timestamp);
-            
-            // Ajouter l'adresse IP si disponible
-            if (mqttClient.options && mqttClient.options.hostname) {
-                data.source = mqttClient.options.hostname;
-            }
-            
-            // Insertion rapide dans MongoDB
-            await db.collection('detections').insertOne(data);
-            
-            // Broadcast en temps réel via WebSocket
-            broadcastToClients({
-                type: 'detection',
-                data: data
+        mqttClient.on('connect', () => {
+            console.log('✅ MQTT connecté');
+            mqttClient.subscribe('esp32cam/detection', (err) => {
+                if (err) {
+                    console.error('❌ Erreur subscription MQTT:', err);
+                }
             });
             
-            // Log minimal pour performance
-            if (data.detected) {
-                console.log(`🎯 ${data.label || 'Objet'} (${data.x},${data.y}) à ${data.timestamp.toLocaleTimeString()}`);
-            } else {
-                console.log(`⭕ Aucun objet à ${data.timestamp.toLocaleTimeString()}`);
+            serverStats.mqttConnected = true;
+            
+            // Broadcaster le statut aux clients WebSocket
+            broadcastServerStatus();
+        });
+
+        mqttClient.on('message', async (topic, message) => {
+            try {
+                const data = JSON.parse(message.toString());
+                
+                // Normaliser le timestamp
+                data.timestamp = normalizeTimestamp(data.timestamp);
+                
+                // Ajouter l'adresse IP si disponible
+                if (mqttClient.options && mqttClient.options.hostname) {
+                    data.source = mqttClient.options.hostname;
+                }
+                
+                // Insertion rapide dans MongoDB
+                if (db) {
+                    await db.collection('detections').insertOne(data);
+                    
+                    // Mettre à jour les statistiques
+                    serverStats.detectionCount++;
+                    serverStats.lastDetection = data.timestamp;
+                }
+                
+                // Broadcast en temps réel via WebSocket
+                broadcastToClients({
+                    type: 'detection',
+                    data: data
+                });
+                
+                // Log minimal pour performance
+                if (data.detected) {
+                    console.log(`🎯 ${data.label || 'Objet'} (${data.x},${data.y}) à ${data.timestamp.toLocaleTimeString()}`);
+                } else {
+                    console.log(`⭕ Aucun objet à ${data.timestamp.toLocaleTimeString()}`);
+                }
+            } catch (error) {
+                console.error('❌ Erreur traitement MQTT:', error.message);
+                console.error('Message reçu:', message.toString());
             }
-        } catch (error) {
+        });
+
+        mqttClient.on('error', (error) => {
             console.error('❌ Erreur MQTT:', error.message);
-            console.error('Message reçu:', message.toString());
-        }
-    });
+            serverStats.mqttConnected = false;
+            broadcastServerStatus();
+        });
+
+        mqttClient.on('disconnect', () => {
+            console.log('⚠️ MQTT déconnecté');
+            serverStats.mqttConnected = false;
+            broadcastServerStatus();
+        });
+
+        mqttClient.on('offline', () => {
+            console.log('⚠️ MQTT hors ligne');
+            serverStats.mqttConnected = false;
+            broadcastServerStatus();
+        });
+
+        mqttClient.on('reconnect', () => {
+            console.log('🔄 Reconnexion MQTT...');
+        });
+        
+    } catch (error) {
+        console.error('❌ Erreur connexion MQTT:', error);
+        serverStats.mqttConnected = false;
+        
+        // Retry après 5 secondes
+        setTimeout(connectMQTT, 5000);
+    }
 }
 
 // WebSocket pour temps réel
@@ -197,18 +269,68 @@ wss.on('connection', (ws, request) => {
         return;
     }
     
+    console.log(`👤 Client WebSocket connecté: ${user.username}`);
     activeClients.add(ws);
     
+    // Envoyer immédiatement le statut du serveur au nouveau client
+    ws.send(JSON.stringify({
+        type: 'server_status',
+        status: {
+            mqtt: serverStats.mqttConnected ? 'connected' : 'disconnected',
+            mongodb: serverStats.dbConnected,
+            serverTime: new Date().toISOString(),
+            uptime: Math.floor((Date.now() - serverStats.startTime.getTime()) / 1000),
+            detectionCount: serverStats.detectionCount,
+            lastDetection: serverStats.lastDetection
+        }
+    }));
+    
     ws.on('close', () => {
+        console.log(`👋 Client WebSocket déconnecté`);
+        activeClients.delete(ws);
+    });
+
+    ws.on('error', (error) => {
+        console.error('❌ Erreur WebSocket:', error);
         activeClients.delete(ws);
     });
 });
 
+// Broadcaster aux clients WebSocket
 function broadcastToClients(data) {
     const message = JSON.stringify(data);
+    let sentCount = 0;
+    
     activeClients.forEach(client => {
         if (client.readyState === WebSocket.OPEN) {
-            client.send(message);
+            try {
+                client.send(message);
+                sentCount++;
+            } catch (error) {
+                console.error('❌ Erreur envoi WebSocket:', error);
+                activeClients.delete(client);
+            }
+        } else {
+            activeClients.delete(client);
+        }
+    });
+    
+    if (sentCount > 0 && data.type === 'detection') {
+        console.log(`📤 Broadcast à ${sentCount} client(s)`);
+    }
+}
+
+// Broadcaster le statut du serveur
+function broadcastServerStatus() {
+    broadcastToClients({
+        type: 'server_status',
+        status: {
+            mqtt: serverStats.mqttConnected ? 'connected' : 'disconnected',
+            mongodb: serverStats.dbConnected,
+            serverTime: new Date().toISOString(),
+            uptime: Math.floor((Date.now() - serverStats.startTime.getTime()) / 1000),
+            detectionCount: serverStats.detectionCount,
+            lastDetection: serverStats.lastDetection
         }
     });
 }
@@ -221,6 +343,11 @@ app.post('/api/auth/login', async (req, res) => {
         // Validation
         if (!username || !password) {
             return res.status(400).json({ error: 'Nom d\'utilisateur et mot de passe requis' });
+        }
+        
+        // Vérifier que la DB est connectée
+        if (!db) {
+            return res.status(503).json({ error: 'Service temporairement indisponible' });
         }
         
         // Rechercher l'utilisateur
@@ -254,6 +381,8 @@ app.post('/api/auth/login', async (req, res) => {
             { expiresIn: JWT_EXPIRES_IN }
         );
         
+        console.log(`🔐 Connexion réussie: ${username}`);
+        
         res.json({
             token,
             user: {
@@ -263,7 +392,7 @@ app.post('/api/auth/login', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('Erreur de connexion:', error);
+        console.error('❌ Erreur de connexion:', error);
         res.status(500).json({ error: 'Erreur interne du serveur' });
     }
 });
@@ -271,19 +400,29 @@ app.post('/api/auth/login', async (req, res) => {
 // Routes API protégées
 app.get('/api/stats', authenticateToken, async (req, res) => {
     try {
+        if (!db) {
+            return res.status(503).json({ error: 'Base de données non disponible' });
+        }
+        
         const detected = await db.collection('detections').countDocuments({ detected: true });
         
         res.json({
             detected,
+            total: serverStats.detectionCount,
             timestamp: new Date()
         });
     } catch (error) {
+        console.error('❌ Erreur stats:', error);
         res.status(500).json({ error: error.message });
     }
 });
 
 app.get('/api/labels', authenticateToken, async (req, res) => {
     try {
+        if (!db) {
+            return res.status(503).json({ error: 'Base de données non disponible' });
+        }
+        
         const labelStats = await db.collection('detections')
             .aggregate([
                 { $match: { detected: true, label: { $exists: true, $ne: null } } },
@@ -294,12 +433,17 @@ app.get('/api/labels', authenticateToken, async (req, res) => {
         
         res.json(labelStats);
     } catch (error) {
+        console.error('❌ Erreur labels:', error);
         res.status(500).json({ error: error.message });
     }
 });
 
 app.get('/api/detections', authenticateToken, async (req, res) => {
     try {
+        if (!db) {
+            return res.status(503).json({ error: 'Base de données non disponible' });
+        }
+        
         const limit = parseInt(req.query.limit) || 20;
         const detections = await db.collection('detections')
             .find({ detected: true })
@@ -309,15 +453,28 @@ app.get('/api/detections', authenticateToken, async (req, res) => {
         
         res.json(detections);
     } catch (error) {
+        console.error('❌ Erreur détections:', error);
         res.status(500).json({ error: error.message });
     }
 });
 
 app.delete('/api/clear', authenticateToken, async (req, res) => {
     try {
+        if (!db) {
+            return res.status(503).json({ error: 'Base de données non disponible' });
+        }
+        
         const result = await db.collection('detections').deleteMany({});
+        
+        // Reset des statistiques
+        serverStats.detectionCount = 0;
+        serverStats.lastDetection = null;
+        
+        console.log(`🗑️ ${result.deletedCount} détections supprimées par ${req.user.username}`);
+        
         res.json({ deleted: result.deletedCount });
     } catch (error) {
+        console.error('❌ Erreur suppression:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -337,29 +494,49 @@ app.get('/login.html', (req, res) => {
 
 // Health check (publique)
 app.get('/health', (req, res) => {
+    const uptime = Math.floor((Date.now() - serverStats.startTime.getTime()) / 1000);
+    
     res.json({
         status: 'ok',
-        mqtt: mqttClient?.connected ? 'connected' : 'disconnected',
-        mongodb: !!db,
+        mqtt: serverStats.mqttConnected ? 'connected' : 'disconnected',
+        mongodb: serverStats.dbConnected,
         clients: activeClients.size,
         version: '2.0',
-        authenticated: req.user ? true : false,
-        serverTime: new Date().toISOString()
+        uptime: uptime,
+        detectionCount: serverStats.detectionCount,
+        lastDetection: serverStats.lastDetection,
+        serverTime: new Date().toISOString(),
+        startTime: serverStats.startTime.toISOString()
+    });
+});
+
+// Route de test (publique)
+app.get('/ping', (req, res) => {
+    res.json({ 
+        pong: true, 
+        time: new Date().toISOString() 
     });
 });
 
 // Démarrer le serveur
 async function startServer() {
     try {
+        console.log('🚀 Démarrage du serveur...');
+        console.log('⏰ Heure serveur:', new Date().toLocaleString());
+        
+        // Connexions
         await connectMongoDB();
         connectMQTT();
         
+        // Démarrer le serveur HTTP
         const server = app.listen(PORT, '0.0.0.0', () => {
+            console.log('═══════════════════════════════════════════');
             console.log(`🚀 Serveur démarré sur port ${PORT}`);
-            console.log(`🔐 Page de connexion: http://localhost:${PORT}`);
+            console.log(`🔐 Connexion: http://localhost:${PORT}`);
             console.log(`📊 Dashboard: http://localhost:${PORT}/dashboard.html`);
-            console.log(`🔑 Identifiants par défaut: admin / admin123`);
-            console.log(`⏰ Heure serveur: ${new Date().toLocaleString()}`);
+            console.log(`🔑 Identifiants: admin / admin123`);
+            console.log(`💚 Health: http://localhost:${PORT}/health`);
+            console.log('═══════════════════════════════════════════');
         });
         
         // Intégrer WebSocket au serveur HTTP
@@ -368,6 +545,15 @@ async function startServer() {
                 wss.emit('connection', ws, request);
             });
         });
+        
+        // Broadcast périodique du statut (toutes les 30 secondes)
+        setInterval(() => {
+            broadcastServerStatus();
+        }, 30000);
+        
+        // Gestion de l'arrêt gracieux
+        process.on('SIGTERM', gracefulShutdown);
+        process.on('SIGINT', gracefulShutdown);
         
         // Gestion des erreurs non capturées
         process.on('uncaughtException', (error) => {
@@ -384,4 +570,23 @@ async function startServer() {
     }
 }
 
+// Arrêt gracieux du serveur
+function gracefulShutdown() {
+    console.log('\n🛑 Arrêt du serveur...');
+    
+    // Fermer les connexions WebSocket
+    activeClients.forEach(client => {
+        client.close(1001, 'Serveur en cours d\'arrêt');
+    });
+    
+    // Fermer MQTT
+    if (mqttClient) {
+        mqttClient.end();
+    }
+    
+    console.log('👋 Serveur arrêté');
+    process.exit(0);
+}
+
+// Démarrer l'application
 startServer();
